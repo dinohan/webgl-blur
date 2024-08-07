@@ -2,6 +2,7 @@ import { FilesetResolver, ImageSegmenter, ImageSegmenterResult, MPMask } from "@
 import { useEffect, useRef } from "react"
 
 const FRAME_RATE = 30
+const BLUR_RADIUS = 10
 
 const createShaderProgram = (gl: WebGL2RenderingContext) => {
   const vs = `
@@ -200,7 +201,7 @@ class Processor {
 
     this.canvasCtx.globalCompositeOperation = 'source-in'
     this.canvasCtx.drawImage(image, 0, 0, this.element.videoWidth, this.element.videoHeight)
-    this.canvasCtx.filter = 'blur(10px)'
+    this.canvasCtx.filter = `blur(${BLUR_RADIUS}px)`
     
     this.canvasCtx.globalCompositeOperation = 'destination-atop'
     this.canvasCtx.drawImage(image, 0, 0, this.element.videoWidth, this.element.videoHeight)
