@@ -1,6 +1,8 @@
 import { FilesetResolver, ImageSegmenter, ImageSegmenterResult, MPMask } from "@mediapipe/tasks-vision"
 import { useEffect, useRef } from "react"
 
+const FRAME_RATE = 30
+
 const createShaderProgram = (gl: WebGL2RenderingContext) => {
   const vs = `
     attribute vec2 position;
@@ -168,9 +170,9 @@ class Processor {
 
     setInterval(() => {
       this.process()
-    }, 1000 / 30)
+    }, 1000 / FRAME_RATE)
 
-    return this.streamCanvas.captureStream(30)
+    return this.streamCanvas.captureStream(FRAME_RATE)
   }
 
   async process() {
