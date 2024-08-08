@@ -133,92 +133,71 @@ const createImageSegmenter = async (canvas: HTMLCanvasElement | OffscreenCanvas)
 }
 
 class Processor {
-  imageSegmenter: ImageSegmenter | null = null
+  async init(track: MediaStreamVideoTrack){
+    console.log(track)
+    const tasksCanvas = new OffscreenCanvas(1, 1)
 
-  element: HTMLVideoElement | null = null
-
-  gl: WebGL2RenderingContext | null = null
-
-  streamCanvas?: HTMLCanvasElement
-  canvasCtx: CanvasRenderingContext2D | null = null
-
-  vertexShader: WebGLShader | null = null
-  fragmentShader: WebGLShader | null = null
-
-  program: WebGLProgram | null = null
-
-  frameBuffer: WebGLFramebuffer | null = null
-
-  lastWebcamTime = -1;
-
-  toImageBitmap?: (mask: MPMask) => Promise<ImageBitmap>
-
-  constructor() {
-    this.callback = this.callback.bind(this)
-    this.process = this.process.bind(this)
-  }
-
-  async init(element:  HTMLVideoElement, canvas: HTMLCanvasElement) {
-    this.streamCanvas = canvas
-    this.canvasCtx = this.streamCanvas.getContext('2d')
-    this.element = element
-
-    const tasksCanvas = new OffscreenCanvas(canvas.width, canvas.height)
-
-    this.imageSegmenter = await createImageSegmenter(tasksCanvas)
-    this.toImageBitmap = createCopyTextureToCanvas(tasksCanvas)
+    const imageSegmenter = await createImageSegmenter(tasksCanvas)
+    const toImageBitmap = createCopyTextureToCanvas(tasksCanvas)
   
+    const trackProcessor = new MediaStreamTrackProcessor({ track });
+    const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' });
 
-    setInterval(() => {
-      this.process()
-    }, 1000 / FRAME_RATE)
+    const canvas = new OffscreenCanvas(1, 1)
+    const ctx = canvas.getContext('2d')
 
-    return this.streamCanvas.captureStream(FRAME_RATE)
-  }
+    const transformer = new TransformStream({
+      async transform(frame: VideoFrame, controller) {
+        const timestamp = frame.timestamp;
+        const now = performance.now();
+        const result = imageSegmenter.segmentForVideo(frame, now);
+        const mask = result.confidenceMasks?.[0];
 
-  async process() {
-    if (!this.imageSegmenter || !this.element) {
-      return
-    }
+        if (!mask || !toImageBitmap || !ctx || !canvas) {
+          frame.close()
+          return
+        }
 
-    const now = performance.now()
-    const image = await createImageBitmap(this.element)
-    await this.imageSegmenter.segmentForVideo(this.element, now, (result) => this.callback(result, image))
-  }
+        const width = frame.displayWidth
+        const height = frame.displayHeight
 
-  async callback(result: ImageSegmenterResult, image: ImageBitmap) {
-    const mask = result.confidenceMasks?.[0]
+        canvas.width = width
+        canvas.height = height
 
-    if (!mask || !this.toImageBitmap || !this.canvasCtx || !this.element) return
+        const maskImage = await toImageBitmap(mask);
 
-    const maskImage = await this.toImageBitmap(mask)
+        ctx.save()
+        ctx.clearRect(0, 0, width, height)
 
-    this.canvasCtx.save()
-    this.canvasCtx.fillStyle = 'white'
-    this.canvasCtx.clearRect(0, 0, this.element.videoWidth, this.element.videoHeight)
+        ctx.drawImage(maskImage, 0, 0, width, height)
 
-    this.canvasCtx.drawImage(maskImage, 0, 0, this.element.videoWidth, this.element.videoHeight)
+        ctx.globalCompositeOperation = 'source-in'
+        ctx.drawImage(frame, 0, 0, width, height)
+        ctx.filter = `blur(${BLUR_RADIUS}px)`
 
-    this.canvasCtx.globalCompositeOperation = 'source-in'
-    this.canvasCtx.drawImage(image, 0, 0, this.element.videoWidth, this.element.videoHeight)
-    this.canvasCtx.filter = `blur(${BLUR_RADIUS}px)`
+        ctx.globalCompositeOperation = 'destination-atop'
+        ctx.drawImage(frame, 0, 0, width, height)
+        ctx.restore()
     
-    this.canvasCtx.globalCompositeOperation = 'destination-atop'
-    this.canvasCtx.drawImage(image, 0, 0, this.element.videoWidth, this.element.videoHeight)
-    this.canvasCtx.restore()
+        frame.close();
+
+        controller.enqueue(new VideoFrame(canvas, { timestamp }));
+      }
+    })
+
+    trackProcessor.readable.pipeThrough(transformer).pipeTo(trackGenerator.writable);
+    return new MediaStream([trackGenerator]);
   }
 }
 
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const processedVideoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     const video = videoRef.current
     const processedVideo = processedVideoRef.current
-    const canvas = canvasRef.current
-    if (!video || !processedVideo || !canvas) return
+    if (!video || !processedVideo) return
 
     navigator.mediaDevices.getUserMedia({ video: true })
       .then(async (stream) => {
@@ -226,12 +205,12 @@ function App() {
         await video.play()
 
         const processor = new Processor()
-        const output = await processor.init(video, canvas)
+        const output = await processor.init(stream.getVideoTracks()[0])
 
-        if (output) {
-          processedVideo.srcObject = output
-          processedVideo.play()
-        }
+        console.log(output)
+
+        processedVideo.srcObject = output
+        await processedVideo.play()
       })
       .catch((err) => console.error(err))
   }, [])
@@ -240,7 +219,6 @@ function App() {
     <>
       <video ref={videoRef}></video>
       <video ref={processedVideoRef}></video>
-      <canvas width={640} height={480} ref={canvasRef} />
     </>
   )
 }
