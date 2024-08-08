@@ -115,7 +115,7 @@ function createCopyTextureToCanvas(
 
 // https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2/wasm/vision_wasm_internal.js
 // https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2/wasm/vision_wasm_internal.js
-const createImageSegmenter = async (canvas: HTMLCanvasElement) => {
+const createImageSegmenter = async (canvas: HTMLCanvasElement | OffscreenCanvas) => {
   const vision = await FilesetResolver.forVisionTasks(
     'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2/wasm'
   )
@@ -142,8 +142,6 @@ class Processor {
   streamCanvas?: HTMLCanvasElement
   canvasCtx: CanvasRenderingContext2D | null = null
 
-  tasksCanvas: HTMLCanvasElement = document.createElement('canvas')
-
   vertexShader: WebGLShader | null = null
   fragmentShader: WebGLShader | null = null
 
@@ -165,8 +163,10 @@ class Processor {
     this.canvasCtx = this.streamCanvas.getContext('2d')
     this.element = element
 
-    this.imageSegmenter = await createImageSegmenter(this.tasksCanvas)
-    this.toImageBitmap = createCopyTextureToCanvas(this.tasksCanvas)
+    const tasksCanvas = new OffscreenCanvas(canvas.width, canvas.height)
+
+    this.imageSegmenter = await createImageSegmenter(tasksCanvas)
+    this.toImageBitmap = createCopyTextureToCanvas(tasksCanvas)
   
 
     setInterval(() => {
