@@ -1,8 +1,13 @@
-import { FilesetResolver, ImageSegmenter, ImageSegmenterResult, MPMask } from "@mediapipe/tasks-vision"
-import { useEffect, useRef } from "react"
+import {
+  FilesetResolver,
+  ImageSegmenter,
+  ImageSegmenterResult,
+  MPMask,
+} from "@mediapipe/tasks-vision";
+import { useEffect, useRef } from "react";
 
-const FRAME_RATE = 30
-const BLUR_RADIUS = 10
+const FRAME_RATE = 30;
+const BLUR_RADIUS = 10;
 
 const createShaderProgram = (gl: WebGL2RenderingContext) => {
   const vs = `
@@ -14,7 +19,7 @@ const createShaderProgram = (gl: WebGL2RenderingContext) => {
       texCoords.y = 1.0 - texCoords.y;
       gl_Position = vec4(position, 0, 1.0);
     }
-  `
+  `;
 
   const fs = `
     precision highp float;
@@ -25,126 +30,129 @@ const createShaderProgram = (gl: WebGL2RenderingContext) => {
         float a = texture2D(textureSampler, texCoords).r;
 
         // Apply step function to thicken the texture
+        // a = step(0.5, a);
 
         gl_FragColor = vec4(a, a, a, a);
     }
-  `
-  const vertexShader = gl.createShader(gl.VERTEX_SHADER)
+  `;
+  const vertexShader = gl.createShader(gl.VERTEX_SHADER);
   if (!vertexShader) {
-    throw Error('can not create vertex shader')
+    throw Error("can not create vertex shader");
   }
-  gl.shaderSource(vertexShader, vs)
-  gl.compileShader(vertexShader)
+  gl.shaderSource(vertexShader, vs);
+  gl.compileShader(vertexShader);
 
   // Create our fragment shader
-  const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)
+  const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
   if (!fragmentShader) {
-    throw Error('can not create fragment shader')
+    throw Error("can not create fragment shader");
   }
-  gl.shaderSource(fragmentShader, fs)
-  gl.compileShader(fragmentShader)
+  gl.shaderSource(fragmentShader, fs);
+  gl.compileShader(fragmentShader);
 
   // Create our program
-  const program = gl.createProgram()
+  const program = gl.createProgram();
   if (!program) {
-    throw Error('can not create program')
+    throw Error("can not create program");
   }
-  gl.attachShader(program, vertexShader)
-  gl.attachShader(program, fragmentShader)
-  gl.linkProgram(program)
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
 
   return {
     vertexShader,
     fragmentShader,
     shaderProgram: program,
     attribLocations: {
-      position: gl.getAttribLocation(program, 'position')
+      position: gl.getAttribLocation(program, "position"),
     },
     uniformLocations: {
-      textureSampler: gl.getUniformLocation(program, 'textureSampler')
-    }
-  }
-}
+      textureSampler: gl.getUniformLocation(program, "textureSampler"),
+    },
+  };
+};
 const createVertexBuffer = (gl: WebGL2RenderingContext) => {
   if (!gl) {
-    return null
+    return null;
   }
-  const vertexBuffer = gl.createBuffer()
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
+  const vertexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
   gl.bufferData(
     gl.ARRAY_BUFFER,
     new Float32Array([-1, -1, -1, 1, 1, 1, -1, -1, 1, 1, 1, -1]),
     gl.STATIC_DRAW
-  )
-  return vertexBuffer
-}
+  );
+  return vertexBuffer;
+};
 
 function createCopyTextureToCanvas(
   canvas: HTMLCanvasElement | OffscreenCanvas
 ) {
-  const gl = canvas.getContext('webgl2')
+  const gl = canvas.getContext("webgl2");
   if (!gl) {
-    return undefined
+    return undefined;
   }
   const {
     shaderProgram,
     attribLocations: { position: positionLocation },
-    uniformLocations: { textureSampler: textureLocation }
-  } = createShaderProgram(gl)
-  const vertexBuffer = createVertexBuffer(gl)
+    uniformLocations: { textureSampler: textureLocation },
+  } = createShaderProgram(gl);
+  const vertexBuffer = createVertexBuffer(gl);
 
   return (mask: MPMask) => {
-    gl.viewport(0, 0, canvas.width, canvas.height)
-    gl.clearColor(1.0, 1.0, 1.0, 1.0)
-    gl.useProgram(shaderProgram)
-    gl.clear(gl.COLOR_BUFFER_BIT)
-    const texture = mask.getAsWebGLTexture()
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
-    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
-    gl.enableVertexAttribArray(positionLocation)
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(1.0, 1.0, 1.0, 1.0);
+    gl.useProgram(shaderProgram);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const texture = mask.getAsWebGLTexture();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(positionLocation);
 
-    gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_2D, texture)
-    gl.uniform1i(textureLocation, 0)
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(textureLocation, 0);
 
-    gl.drawArrays(gl.TRIANGLES, 0, 6)
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    return createImageBitmap(canvas)
-  }
+    return createImageBitmap(canvas);
+  };
 }
 
 // https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2/wasm/vision_wasm_internal.js
 // https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2/wasm/vision_wasm_internal.js
-const createImageSegmenter = async (canvas: HTMLCanvasElement | OffscreenCanvas) => {
+const createImageSegmenter = async (
+  canvas: HTMLCanvasElement | OffscreenCanvas
+) => {
   const vision = await FilesetResolver.forVisionTasks(
-    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2/wasm'
-  )
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2/wasm"
+  );
 
   return ImageSegmenter.createFromOptions(vision, {
     baseOptions: {
       modelAssetPath:
-        'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter_landscape/float16/latest/selfie_segmenter_landscape.tflite',
-      delegate: 'GPU',
+        "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter_landscape/float16/latest/selfie_segmenter_landscape.tflite",
+      delegate: "GPU",
     },
     canvas,
-    runningMode: 'VIDEO',
+    runningMode: "VIDEO",
     outputConfidenceMasks: true,
-  })
-}
+  });
+};
 
 class Processor {
-  async init(track: MediaStreamVideoTrack){
-    console.log(track)
-    const tasksCanvas = new OffscreenCanvas(1, 1)
+  async init(track: MediaStreamVideoTrack) {
+    console.log(track);
+    const tasksCanvas = new OffscreenCanvas(1, 1);
 
-    const imageSegmenter = await createImageSegmenter(tasksCanvas)
-    const toImageBitmap = createCopyTextureToCanvas(tasksCanvas)
-  
+    const imageSegmenter = await createImageSegmenter(tasksCanvas);
+    const toImageBitmap = createCopyTextureToCanvas(tasksCanvas);
+
     const trackProcessor = new MediaStreamTrackProcessor({ track });
-    const trackGenerator = new MediaStreamTrackGenerator({ kind: 'video' });
+    const trackGenerator = new MediaStreamTrackGenerator({ kind: "video" });
 
-    const canvas = new OffscreenCanvas(1, 1)
-    const ctx = canvas.getContext('2d')
+    const canvas = new OffscreenCanvas(1, 1);
+    const ctx = canvas.getContext("2d");
 
     const transformer = new TransformStream({
       async transform(frame: VideoFrame, controller) {
@@ -154,74 +162,77 @@ class Processor {
         const mask = result.confidenceMasks?.[0];
 
         if (!mask || !toImageBitmap || !ctx || !canvas) {
-          frame.close()
-          return
+          frame.close();
+          return;
         }
 
-        const width = frame.displayWidth
-        const height = frame.displayHeight
+        const width = frame.displayWidth;
+        const height = frame.displayHeight;
 
-        canvas.width = width
-        canvas.height = height
+        canvas.width = width;
+        canvas.height = height;
 
         const maskImage = await toImageBitmap(mask);
 
-        ctx.save()
-        ctx.clearRect(0, 0, width, height)
+        ctx.save();
+        ctx.clearRect(0, 0, width, height);
 
-        ctx.drawImage(maskImage, 0, 0, width, height)
+        ctx.drawImage(maskImage, 0, 0, width, height);
 
-        ctx.globalCompositeOperation = 'source-in'
-        ctx.drawImage(frame, 0, 0, width, height)
-        ctx.filter = `blur(${BLUR_RADIUS}px)`
+        ctx.globalCompositeOperation = "source-in";
+        ctx.drawImage(frame, 0, 0, width, height);
+        ctx.filter = `blur(${BLUR_RADIUS}px)`;
 
-        ctx.globalCompositeOperation = 'destination-atop'
-        ctx.drawImage(frame, 0, 0, width, height)
-        ctx.restore()
-    
+        ctx.globalCompositeOperation = "destination-atop";
+        ctx.drawImage(frame, 0, 0, width, height);
+        ctx.restore();
+
         frame.close();
 
         controller.enqueue(new VideoFrame(canvas, { timestamp }));
-      }
-    })
+      },
+    });
 
-    trackProcessor.readable.pipeThrough(transformer).pipeTo(trackGenerator.writable);
+    trackProcessor.readable
+      .pipeThrough(transformer)
+      .pipeTo(trackGenerator.writable);
     return new MediaStream([trackGenerator]);
   }
 }
 
 function App() {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const processedVideoRef = useRef<HTMLVideoElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const processedVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    const video = videoRef.current
-    const processedVideo = processedVideoRef.current
-    if (!video || !processedVideo) return
+    const video = videoRef.current;
+    const processedVideo = processedVideoRef.current;
+    if (!video || !processedVideo) return;
 
-    navigator.mediaDevices.getUserMedia({ video: true })
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
       .then(async (stream) => {
-        video.srcObject = stream
-        await video.play()
+        video.srcObject = stream;
+        await video.play();
 
-        const processor = new Processor()
-        const output = await processor.init(stream.getVideoTracks()[0])
+        const processor = new Processor();
+        const output = await processor.init(stream.getVideoTracks()[0]);
 
-        console.log(output)
+        console.log(output);
 
-        processedVideo.srcObject = output
-        await processedVideo.play()
+        processedVideo.srcObject = output;
+        await processedVideo.play();
       })
-      .catch((err) => console.error(err))
-  }, [])
+      .catch((err) => console.error(err));
+  }, []);
 
   return (
     <>
       <video ref={videoRef}></video>
       <video ref={processedVideoRef}></video>
     </>
-  )
+  );
 }
 
-export default App
-// 
+export default App;
+//
