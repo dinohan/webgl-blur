@@ -20,7 +20,7 @@ export const createShaderProgram = (gl: WebGL2RenderingContext) => {
       void main() {
           float a = texture2D(textureSampler, texCoords).r;
   
-          // Apply step function to thicken the texture
+          // a = step(0.99, a);
   
           gl_FragColor = vec4(a, a, a, a);
       }
@@ -50,15 +50,9 @@ export const createShaderProgram = (gl: WebGL2RenderingContext) => {
   gl.linkProgram(program);
 
   return {
-    vertexShader,
-    fragmentShader,
     shaderProgram: program,
-    attribLocations: {
-      position: gl.getAttribLocation(program, "position"),
-    },
-    uniformLocations: {
-      textureSampler: gl.getUniformLocation(program, "textureSampler"),
-    },
+    positionLocation: gl.getAttribLocation(program, "position"),
+    textureLocation: gl.getUniformLocation(program, "textureSampler"),
   };
 };
 
@@ -83,11 +77,8 @@ export function createCopyTextureToCanvas(
   if (!gl) {
     return undefined;
   }
-  const {
-    shaderProgram,
-    attribLocations: { position: positionLocation },
-    uniformLocations: { textureSampler: textureLocation },
-  } = createShaderProgram(gl);
+  const { shaderProgram, positionLocation, textureLocation } =
+    createShaderProgram(gl);
   const vertexBuffer = createVertexBuffer(gl);
 
   return (mask: MPMask) => {
@@ -99,7 +90,6 @@ export function createCopyTextureToCanvas(
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(positionLocation);
-
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.uniform1i(textureLocation, 0);
