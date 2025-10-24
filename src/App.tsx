@@ -18,10 +18,10 @@ function App() {
         await video.play();
 
         const processor = new Processor();
-        const output = await processor.init(video, canvas);
+        const processedMediaStream = await processor.init(video, canvas);
 
-        if (output) {
-          processedVideo.srcObject = output;
+        if (processedMediaStream) {
+          processedVideo.srcObject = processedMediaStream;
           processedVideo.play();
         }
       })
